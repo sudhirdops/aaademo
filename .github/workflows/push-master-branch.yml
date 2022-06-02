@@ -49,7 +49,7 @@ jobs:
 
             # Authenticate to org
             - name: 'Authenticate to Production Org'
-              run: sfdx auth:sfdxurl:store -f ./SFDX_PRODUCTION_URL.txt -s -a production
+              run: sfdx force:auth:sfdxurl:store -f ./SFDX_PRODUCTION_URL.txt -s -a production
 
             - name: 'Deploy the entire branch to Production org'
               run: sfdx force:source:deploy -p force-app --testlevel RunLocalTests --json
