@@ -1,5 +1,5 @@
 # Unique name for this workflow
-name: Validate PR on dev branch
+name: Validate PR on develop branch
 
 # Definition when the workflow should run
 on:
@@ -7,11 +7,11 @@ on:
     pull_request:
       # The events are that a PR is opened, or when a commit is pushed
       # to a branch that has an existing pull request
-      types: [ commit,merge,pull]
+      types: [opened, synchronize]
       # The branches filter allows to specify that this workflow should only
       # run if the branch name is "develop". This way we prevent this workflow
       # from running when PRs are opened on other branches
-      branches: [ dev ]
+      branches: [ develop ]
       # We only care about changes to the force-app directory, which is the
       # root directory of the sfdx project. This prevents the job from running
       # when changing non-salesforce files (like this yml file).
@@ -97,6 +97,7 @@ jobs:
                   tar xJf sfdx-linux-x64.tar.xz -C ~/sfdx --strip-components 1
                   echo "$HOME/sfdx/bin" >> $GITHUB_PATH
                   ~/sfdx/bin/sfdx version
+
             # Then we install the SFDX-Git-Delta plugin - https://github.com/scolladon/sfdx-git-delta
             # This is an awesome plugin that allows us to extract a package.xml with the metadata
             # that has changed between commits. I highly recommend going over the github readme 
@@ -106,6 +107,7 @@ jobs:
               run: | 
                   echo y | sfdx plugins:install sfdx-git-delta
                   sfdx plugins 
+
             # Install java as it is required for the next step
             - name: 'Installing java'
               run: sudo apt-get install openjdk-8-jdk
@@ -131,6 +133,7 @@ jobs:
               shell: bash
               run: |
                   echo ${{ secrets.SFDX_INTEGRATION_URL}} > ./SFDX_INTEGRATION_URL.txt
+
             # Authenticate to org using the URL stored in the text file
             - name: 'Authenticate to Integration Org'
               run: sfdx auth:sfdxurl:store -f ./SFDX_INTEGRATION_URL.txt -s -a integration
@@ -142,6 +145,7 @@ jobs:
               run: | 
                   mkdir changed-sources
                   sfdx sgd:source:delta --to "HEAD" --from "HEAD^" --output changed-sources/ --generate-delta --source force-app/ 
+
             # Now we can use the sfdx scanner to scan the code in the delta directory
             # The output of the scan is stored in a file called apexScanResults.sarif
 
@@ -153,6 +157,7 @@ jobs:
                   cd changed-sources
                   sfdx scanner:run --format sarif --target './**/*.cls' --category "Design,Best Practices,Performance" --outfile 'apexScanResults.sarif'  
                   cd ..
+
             # Now we upload the .sarif file as explained in the previous step
             - name: Upload SARIF file
               uses: github/codeql-action/upload-sarif@v1
@@ -168,11 +173,12 @@ jobs:
               run: |
                   echo ${{env.APEX_TESTS}}
                   sfdx force:source:deploy -p "changed-sources/force-app" --checkonly --testlevel RunSpecifiedTests --runtests ${{env.APEX_TESTS}} --json
+
             # If the env variable equals all, we run all tests
             - name: 'Check-only deploy delta changes - run all tests'
               if: ${{ env.APEX_TESTS == 'all' }}
               run: |
                   sfdx force:source:deploy -p "changed-sources/force-app" --checkonly --testlevel RunLocalTests  --json
+
             - name: 'Deploy destructive changes (if any)'
               run: sfdx force:mdapi:deploy -d "changed-sources/destructiveChanges" --checkonly --ignorewarnings 
-
